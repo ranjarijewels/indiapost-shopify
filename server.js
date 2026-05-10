@@ -7,10 +7,46 @@ const app = express();
 app.use(bodyParser.json());
 
 const SHOP = "ranjarijewels.myshopify.com";
-const ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
+
+const CLIENT_ID = process.env.SHOPIFY_API_KEY;
+const CLIENT_SECRET = process.env.SHOPIFY_API_SECRET;
+
+let ACCESS_TOKEN = "";
 
 app.get("/", (req, res) => {
   res.send("India Post Shopify Integration Running");
+});
+
+app.get("/auth", (req, res) => {
+  const installUrl =
+    `https://${SHOP}/admin/oauth/authorize` +
+    `?client_id=${CLIENT_ID}` +
+    `&scope=read_orders,write_orders,read_fulfillments,write_fulfillments,read_shipping,write_shipping,read_products` +
+    `&redirect_uri=https://indiapost-shopify.onrender.com/auth/callback`;
+
+  res.redirect(installUrl);
+});
+
+app.get("/auth/callback", async (req, res) => {
+  const { code } = req.query;
+
+  try {
+    const response = await axios.post(
+      `https://${SHOP}/admin/oauth/access_token`,
+      {
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        code,
+      }
+    );
+
+    ACCESS_TOKEN = response.data.access_token;
+
+    res.send("Shopify connected successfully!");
+  } catch (error) {
+    console.error(error.response?.data || error.message);
+    res.status(500).send("Authentication failed");
+  }
 });
 
 app.get("/orders", async (req, res) => {
@@ -30,12 +66,6 @@ app.get("/orders", async (req, res) => {
     console.error(error.response?.data || error.message);
     res.status(500).send("Error fetching orders");
   }
-});
-
-app.post("/webhook/indiapost", (req, res) => {
-  console.log("Webhook Received:", req.body);
-
-  res.status(200).send("Webhook received");
 });
 
 const PORT = process.env.PORT || 10000;
