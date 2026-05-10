@@ -11,11 +11,20 @@ const SHOP = "wacfbz-1z.myshopify.com";
 const CLIENT_ID = process.env.SHOPIFY_API_KEY;
 const CLIENT_SECRET = process.env.SHOPIFY_API_SECRET;
 
+const INDIAPOST_USERNAME = process.env.INDIAPOST_USERNAME;
+const INDIAPOST_PASSWORD = process.env.INDIAPOST_PASSWORD;
+
+const CUSTOMER_ID = "1242359603";
+const CONTRACT_ID = "41743980";
+
 let ACCESS_TOKEN = "";
+let INDIAPOST_TOKEN = "";
 
 app.get("/", (req, res) => {
   res.send("India Post Shopify Integration Running");
 });
+
+/* ---------------- SHOPIFY AUTH ---------------- */
 
 app.get("/auth", (req, res) => {
   const installUrl =
@@ -49,6 +58,31 @@ app.get("/auth/callback", async (req, res) => {
   }
 });
 
+/* ---------------- INDIA POST LOGIN ---------------- */
+
+async function loginIndiaPost() {
+  try {
+    const response = await axios.post(
+      "https://test.cept.gov.in/beextcustomer/v1/access/login",
+      {
+        username: INDIAPOST_USERNAME,
+        password: INDIAPOST_PASSWORD,
+      }
+    );
+
+    INDIAPOST_TOKEN = response.data.data.access_token;
+
+    console.log("India Post Login Successful");
+  } catch (error) {
+    console.error(
+      "India Post Login Error:",
+      error.response?.data || error.message
+    );
+  }
+}
+
+/* ---------------- SHOPIFY ORDERS ---------------- */
+
 app.get("/orders", async (req, res) => {
   try {
     const response = await axios.get(
@@ -68,18 +102,82 @@ app.get("/orders", async (req, res) => {
   }
 });
 
+/* ---------------- FULFILLMENT WEBHOOK ---------------- */
+
 app.post("/webhook/orders/create", async (req, res) => {
   try {
-    const order = req.body;
+    const fulfillment = req.body;
 
-    console.log("New Shopify Order:", order);
+    console.log("Fulfillment Received:", fulfillment);
 
-    // India Post shipment logic will come here later
+    await loginIndiaPost();
 
-    res.status(200).send("Order webhook received");
+    const order = fulfillment;
+
+    const bookingPayload = {
+      articles: [
+        {
+          bulk_customer_id: parseInt(CUSTOMER_ID),
+          contract_id: parseInt(CONTRACT_ID),
+          pickup_or_dropoff: "DROPOFF",
+          article_type: "SP",
+          physical_weight: 1,
+          shape_of_article: "NROL",
+          length: 10,
+          breadth_diameter: 10,
+          height: 5,
+          sender_name: "Ranjari Jewels",
+          sender_add_line_1: "Chennai",
+          sender_city: "Chennai",
+          sender_state: "Tamil Nadu",
+          sender_pincode: "600001",
+          sender_mobile_no: "9999999999",
+          receiver_name:
+            order.shipping_address?.name || "Customer",
+          receiver_add_line_1:
+            order.shipping_address?.address1 || "Address",
+          receiver_city:
+            order.shipping_address?.city || "City",
+          receiver_state:
+            order.shipping_address?.province || "State",
+          receiver_pincode:
+            order.shipping_address?.zip || "000000",
+          receiver_mobile_no:
+            order.shipping_address?.phone || "9999999999",
+          drop_off_pincode: "600001",
+          alt_address_flag: false,
+          pickup_address_flag: false,
+          codr_cod: "COD",
+          value_for_codr_cod: 0,
+          bulk_reference: order.order_number?.toString() || "SHOPIFY",
+        },
+      ],
+    };
+
+    const bookingResponse = await axios.post(
+      `https://test.cept.gov.in/beextcustomer/process-articles-file/${CUSTOMER_ID}`,
+      bookingPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${INDIAPOST_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log(
+      "India Post Booking Success:",
+      bookingResponse.data
+    );
+
+    res.status(200).send("Fulfillment processed successfully");
   } catch (error) {
-    console.error(error);
-    res.status(500).send("Webhook error");
+    console.error(
+      "Webhook Processing Error:",
+      error.response?.data || error.message
+    );
+
+    res.status(500).send("Webhook processing failed");
   }
 });
 
