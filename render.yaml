@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: indiapost-shopify
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
