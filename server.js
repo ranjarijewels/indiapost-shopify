@@ -6,7 +6,7 @@ const app = express();
 
 app.use(bodyParser.json());
 
-const SHOP = "ranjarijewels.myshopify.com";
+const SHOP = "wacfbz-1z.myshopify.com";
 
 const CLIENT_ID = process.env.SHOPIFY_API_KEY;
 const CLIENT_SECRET = process.env.SHOPIFY_API_SECRET;
@@ -66,6 +66,12 @@ app.get("/orders", async (req, res) => {
     console.error(error.response?.data || error.message);
     res.status(500).send("Error fetching orders");
   }
+});
+
+app.post("/webhook/indiapost", (req, res) => {
+  console.log("Webhook Received:", req.body);
+
+  res.status(200).send("Webhook received");
 });
 
 const PORT = process.env.PORT || 10000;
