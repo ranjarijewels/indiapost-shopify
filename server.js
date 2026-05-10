@@ -51,9 +51,15 @@ app.get("/auth/callback", async (req, res) => {
 
     ACCESS_TOKEN = response.data.access_token;
 
+    console.log("Shopify Access Token Generated");
+
     res.send("Shopify connected successfully!");
   } catch (error) {
-    console.error(error.response?.data || error.message);
+    console.error(
+      "Shopify Auth Error:",
+      error.response?.data || error.message
+    );
+
     res.status(500).send("Authentication failed");
   }
 });
@@ -67,6 +73,13 @@ async function loginIndiaPost() {
       {
         username: INDIAPOST_USERNAME,
         password: INDIAPOST_PASSWORD,
+      },
+      {
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        timeout: 30000,
       }
     );
 
@@ -81,7 +94,7 @@ async function loginIndiaPost() {
   }
 }
 
-/* ---------------- SHOPIFY ORDERS ---------------- */
+/* ---------------- FETCH SHOPIFY ORDERS ---------------- */
 
 app.get("/orders", async (req, res) => {
   try {
@@ -97,7 +110,11 @@ app.get("/orders", async (req, res) => {
 
     res.json(response.data);
   } catch (error) {
-    console.error(error.response?.data || error.message);
+    console.error(
+      "Order Fetch Error:",
+      error.response?.data || error.message
+    );
+
     res.status(500).send("Error fetching orders");
   }
 });
@@ -110,49 +127,79 @@ app.post("/webhook/orders/create", async (req, res) => {
 
     console.log("Fulfillment Received:", fulfillment);
 
+    /* LOGIN INDIA POST */
+
     await loginIndiaPost();
 
-    const order = fulfillment;
+    if (!INDIAPOST_TOKEN) {
+      return res.status(500).send("India Post token generation failed");
+    }
+
+    /* PREPARE BOOKING PAYLOAD */
 
     const bookingPayload = {
       articles: [
         {
           bulk_customer_id: parseInt(CUSTOMER_ID),
           contract_id: parseInt(CONTRACT_ID),
+
           pickup_or_dropoff: "DROPOFF",
+
           article_type: "SP",
+
           physical_weight: 1,
+
           shape_of_article: "NROL",
+
           length: 10,
           breadth_diameter: 10,
           height: 5,
+
           sender_name: "Ranjari Jewels",
           sender_add_line_1: "Chennai",
           sender_city: "Chennai",
           sender_state: "Tamil Nadu",
           sender_pincode: "600001",
           sender_mobile_no: "9999999999",
+
           receiver_name:
-            order.shipping_address?.name || "Customer",
+            fulfillment.shipping_address?.name || "Customer",
+
           receiver_add_line_1:
-            order.shipping_address?.address1 || "Address",
+            fulfillment.shipping_address?.address1 || "Address",
+
           receiver_city:
-            order.shipping_address?.city || "City",
+            fulfillment.shipping_address?.city || "City",
+
           receiver_state:
-            order.shipping_address?.province || "State",
+            fulfillment.shipping_address?.province || "State",
+
           receiver_pincode:
-            order.shipping_address?.zip || "000000",
+            fulfillment.shipping_address?.zip || "000000",
+
           receiver_mobile_no:
-            order.shipping_address?.phone || "9999999999",
+            fulfillment.shipping_address?.phone || "9999999999",
+
           drop_off_pincode: "600001",
+
           alt_address_flag: false,
           pickup_address_flag: false,
+
           codr_cod: "COD",
           value_for_codr_cod: 0,
-          bulk_reference: order.order_number?.toString() || "SHOPIFY",
+
+          bulk_reference:
+            fulfillment.order_number?.toString() || "SHOPIFY",
         },
       ],
     };
+
+    console.log(
+      "Booking Payload:",
+      JSON.stringify(bookingPayload, null, 2)
+    );
+
+    /* CREATE INDIA POST SHIPMENT */
 
     const bookingResponse = await axios.post(
       `https://test.cept.gov.in/beextcustomer/process-articles-file/${CUSTOMER_ID}`,
@@ -161,7 +208,9 @@ app.post("/webhook/orders/create", async (req, res) => {
         headers: {
           Authorization: `Bearer ${INDIAPOST_TOKEN}`,
           "Content-Type": "application/json",
+          accept: "application/json",
         },
+        timeout: 30000,
       }
     );
 
