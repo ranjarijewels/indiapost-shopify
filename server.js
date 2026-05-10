@@ -68,10 +68,19 @@ app.get("/orders", async (req, res) => {
   }
 });
 
-app.post("/webhook/indiapost", (req, res) => {
-  console.log("Webhook Received:", req.body);
+app.post("/webhook/orders/create", async (req, res) => {
+  try {
+    const order = req.body;
 
-  res.status(200).send("Webhook received");
+    console.log("New Shopify Order:", order);
+
+    // India Post shipment logic will come here later
+
+    res.status(200).send("Order webhook received");
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Webhook error");
+  }
 });
 
 const PORT = process.env.PORT || 10000;
